@@ -190,3 +190,32 @@ Password: welcome2019
 Thank you
 HR
 ```
+
+
+└──╼ [★]$ smbclient //10.129.149.154/Users -U TempUser
+Password for [WORKGROUP\TempUser]:
+Try "help" to get a list of possible commands.
+smb: \> ls
+  .                                   D        0  Sat Jan 25 17:04:21 2020
+  ..                                  D        0  Sat Jan 25 17:04:21 2020
+  Administrator                       D        0  Fri Aug  9 10:08:23 2019
+  C.Smith                             D        0  Sun Jan 26 01:21:44 2020
+  L.Frost                             D        0  Thu Aug  8 12:03:01 2019
+  R.Thompson                          D        0  Thu Aug  8 12:02:50 2019
+  TempUser                            D        0  Wed Aug  7 17:55:56 2019
+
+		5242623 blocks of size 4096. 1839731 blocks available
+smb: \> ls TempUser
+  TempUser                            D        0  Wed Aug  7 17:55:56 2019
+
+		5242623 blocks of size 4096. 1839731 blocks available
+smb: \> cd TempUser
+smb: \TempUser\> ls
+  .                                   D        0  Wed Aug  7 17:55:56 2019
+  ..                                  D        0  Wed Aug  7 17:55:56 2019
+  New Text Document.txt               A        0  Wed Aug  7 17:55:56 2019
+
+		5242623 blocks of size 4096. 1839731 blocks available
+smb: \TempUser\> get "New Text Document.txt"
+getting file \TempUser\New Text Document.txt of size 0 as New Text Document.txt (0.0 KiloBytes/sec) (average 0.0 KiloBytes/sec)
+smb: \TempUser\> 
