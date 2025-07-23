@@ -1,8 +1,8 @@
 # About Nest
 Nest is an easy difficulty Windows machine featuring an SMB server that permits guest access. The shares can be enumerated to gain credentials for a low privileged user. This user is found to have access to configuration files containing sensitive information. Another user&amp;amp;#039;s password is found through source code analysis, which is used to gain a foothold on the box. A custom service is found to be running, which is enumerated to find and decrypt Administrator credentials.
 
+To begin the engagement, I launched a full TCP port scan against the target to identify open ports and service versions. I wanted to be thorough, so I scanned all 65,535 TCP ports using nmap with aggressive timing and service/version detection.
 
-I started with a nmap scan:
 
 ```bash
 nmap -p- --min-rate 1000 -T4 -sV -sC -oN full_tcp_scan.txt 10.129.149.247
@@ -80,16 +80,14 @@ Service detection performed. Please report any incorrect results at https://nmap
 
 ```
 
-
-I performed another banner grab using nc targetting port 4386
+Nmap output included banner-like responses from various probes, all showing the same string:
 
 ```bash
-nc 10.129.149.154 4386
-
 HQK Reporting Service V1.2
-
-
 ```
+The banner and command structure suggested that the service running on port 4386 is some kind of legacy query engine called HQK Reporting Service V1.2, which may allow execution of stored queries or interaction with a backend database.
+
+After identifying port 445/tcp as open from my earlier Nmap scan, I moved on to enumerate available SMB shares. I began with an anonymous listing using smbclient.
 
 ```bash
 smbclient -N -L //10.129.149.154
@@ -106,49 +104,18 @@ Reconnecting with SMB1 for workgroup listing.
 do_connect: Connection to 10.129.149.154 failed (Error NT_STATUS_IO_TIMEOUT)
 Unable to connect with SMB1 -- no workgroup available
 ```
+
+Despite the fallback issue, I could still interact with the shares using smbclient directly.
+
+
 ```bash
 smbclient //10.129.149.154/Data 
-Password for [WORKGROUP\mendozgi]:
-Try "help" to get a list of possible commands.
-smb: \> help
-?              allinfo        altname        archive        backup         
-blocksize      cancel         case_sensitive cd             chmod          
-chown          close          del            deltree        dir            
-du             echo           exit           get            getfacl        
-geteas         hardlink       help           history        iosize         
-lcd            link           lock           lowercase      ls             
-l              mask           md             mget           mkdir          
-more           mput           newer          notify         open           
-posix          posix_encrypt  posix_open     posix_mkdir    posix_rmdir    
-posix_unlink   posix_whoami   print          prompt         put            
-pwd            q              queue          quit           readlink       
-rd             recurse        reget          rename         reput          
-rm             rmdir          showacls       setea          setmode        
-scopy          stat           symlink        tar            tarmode        
-timeout        translate      unlock         volume         vuid           
-wdel           logon          listconnect    showconnect    tcon           
-tdis           tid            utimes         logoff         ..             
-!              
-smb: \> dir
-  .                                   D        0  Wed Aug  7 17:53:46 2019
-  ..                                  D        0  Wed Aug  7 17:53:46 2019
-  IT                                  D        0  Wed Aug  7 17:58:07 2019
-  Production                          D        0  Mon Aug  5 16:53:38 2019
-  Reports                             D        0  Mon Aug  5 16:53:44 2019
-  Shared                              D        0  Wed Aug  7 14:07:51 2019
-
 ```
 
-```bash
-smb: \Shared\> cd Maintenance 
-smb: \Shared\Maintenance\> ls
-  .                                   D        0  Wed Aug  7 14:07:32 2019
-  ..                                  D        0  Wed Aug  7 14:07:32 2019
-  Maintenance Alerts.txt              A       48  Mon Aug  5 18:01:44 2019
-```
+I began exploring the Shared directory and navigated deeper. I found a small file:
 
 
-```bash
+```nginx
 smb: \Shared\Templates\HR\> ls
   .                                   D        0  Wed Aug  7 14:08:01 2019
   ..                                  D        0  Wed Aug  7 14:08:01 2019
@@ -158,23 +125,6 @@ smb: \Shared\Templates\HR\> ls
 smb: \Shared\Templates\HR\> get "Welcome Email.txt"
 getting file \Shared\Templates\HR\Welcome Email.txt of size 425 as Welcome Email.txt (1.4 KiloBytes/sec) (average 0.8 KiloBytes/sec)
 ```
-
-```bash
-smbclient //10.129.149.154/Users 
-Password for [WORKGROUP\mendozgi]:
-Try "help" to get a list of possible commands.
-smb: \> ls
-  .                                   D        0  Sat Jan 25 17:04:21 2020
-  ..                                  D        0  Sat Jan 25 17:04:21 2020
-  Administrator                       D        0  Fri Aug  9 10:08:23 2019
-  C.Smith                             D        0  Sun Jan 26 01:21:44 2020
-  L.Frost                             D        0  Thu Aug  8 12:03:01 2019
-  R.Thompson                          D        0  Thu Aug  8 12:02:50 2019
-  TempUser                            D        0  Wed Aug  7 17:55:56 2019
-
-```
-
-All of the users gave an access denied : NT_STATUS_ACCESS_DENIED listing
 
 ```bash
  cat 'Welcome Email.txt'
@@ -193,42 +143,15 @@ Password: welcome2019
 Thank you
 HR
 ```
+Authenticated access to the Data share revealed multiple directories:
 
-```bash
-└──╼ [★]$ smbclient //10.129.149.154/Users -U TempUser
-Password for [WORKGROUP\TempUser]:
-Try "help" to get a list of possible commands.
-smb: \> ls
-  .                                   D        0  Sat Jan 25 17:04:21 2020
-  ..                                  D        0  Sat Jan 25 17:04:21 2020
-  Administrator                       D        0  Fri Aug  9 10:08:23 2019
-  C.Smith                             D        0  Sun Jan 26 01:21:44 2020
-  L.Frost                             D        0  Thu Aug  8 12:03:01 2019
-  R.Thompson                          D        0  Thu Aug  8 12:02:50 2019
-  TempUser                            D        0  Wed Aug  7 17:55:56 2019
-
-		5242623 blocks of size 4096. 1839731 blocks available
-smb: \> ls TempUser
-  TempUser                            D        0  Wed Aug  7 17:55:56 2019
-
-		5242623 blocks of size 4096. 1839731 blocks available
-smb: \> cd TempUser
-smb: \TempUser\> ls
-  .                                   D        0  Wed Aug  7 17:55:56 2019
-  ..                                  D        0  Wed Aug  7 17:55:56 2019
-  New Text Document.txt               A        0  Wed Aug  7 17:55:56 2019
-
-		5242623 blocks of size 4096. 1839731 blocks available
-smb: \TempUser\> get "New Text Document.txt"
-getting file \TempUser\New Text Document.txt of size 0 as New Text Document.txt (0.0 KiloBytes/sec) (average 0.0 KiloBytes/sec)
-smb: \TempUser\> 
-
-```
-This file was empty, I didn't find anything useful.
 
 ```bash
 smbclient //10.129.149.154/Data -U TempUser
 ```
+
+Downloaded RU_config.xml:
+
 
 ```bash
 smb: \IT\Configs\RU Scanner\> ls
@@ -244,15 +167,20 @@ getting file \IT\Configs\RU Scanner\RU_config.xml of size 270 as RU_config.xml (
 Found a pair of credentials.
 
 ```bash
-──╼ [★]$ cat RU_config.xml
+cat RU_config.xml
 <?xml version="1.0"?>
 <ConfigFile xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
   <Port>389</Port>
   <Username>c.smith</Username>
   <Password>fTEzAfYDoz1YzkqhQkH6GQFYKp1XY5hm7bjOP86yYxE=</Password>
 ```
-I discovered some other files.
-```
+This file contains a base64-encoded, AES-encrypted password associated with the user c.smith.
+
+
+Explored further paths and downloaded more config files:
+
+
+```bash
 smb: \IT\Configs\Microsoft\> ls
   .                                   D        0  Wed Aug  7 14:23:26 2019
   ..                                  D        0  Wed Aug  7 14:23:26 2019
@@ -262,7 +190,7 @@ smb: \IT\Configs\Microsoft\> ls
 smb: \IT\Configs\Microsoft\> get Options.xml
 getting file \IT\Configs\Microsoft\Options.xml of size 4598 as Options.xml (11.5 KiloBytes/sec) (average 6.9 KiloBytes/sec)
 ```
-
+Within the Options.xml, a Notepad++ history pointed to a sensitive path:
 
 ```bash
 cat config.xml
@@ -279,7 +207,8 @@ cat config.xml
 </NotepadPlus>
 ```
 
-Got all the files from that share
+Used smbget to recursively download files from Secure$:
+
 ```bash
 smbget -U TempUser -R smb://10.129.149.154/Secure$/IT/Carl
 Password for [TempUser] connecting to //10.129.149.154/Secure$: 
