@@ -633,3 +633,17 @@ af940f193b9cbXXXXX51aa3365f129c
 
 ````
 
+# Summary
+
+- Decompiled and analyzed encryption methods used by RUScanner and HQK Reporting.
+
+- Created Python-based decrypt scripts replicating the VB.NET AES-CBC with PBKDF2 parameters.
+
+- Extracted credentials from SMB shares and telnet service.
+
+- Successfully used decrypted credentials to gain SYSTEM access via psexec.py.
+
+- Retrieved the root flag confirming full compromise.
+
+
+
